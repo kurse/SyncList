@@ -14,6 +14,7 @@ val spray = "1.3.2"
 
 resolvers += Resolver.url("TypeSafe Ivy releases", url("http://dl.bintray.com/typesafe/ivy-releases/"))(Resolver.ivyStylePatterns)
 libraryDependencies += "org.mongodb" %% "casbah" % "3.1.1"
+libraryDependencies += "org.json" % "json" % "20090211"
 libraryDependencies ++= Seq(
 
   "org.scala-lang" % "scala-reflect" % "2.11.8",
@@ -22,7 +23,6 @@ libraryDependencies ++= Seq(
 "org.scala-lang.modules" % "scala-xml_2.11" % "1.0.4"
 )
 
-libraryDependencies += "com.github.t3hnar" %% "scala-bcrypt" % "2.6"
 libraryDependencies ++=
   Seq(
     // -- Logging --

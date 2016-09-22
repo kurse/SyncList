@@ -1,6 +1,7 @@
 import java.math.BigInteger
 import java.security.MessageDigest
 import java.util.Calendar
+
 import org.json.JSONObject
 import akka.actor.Actor
 import org.mongodb.scala._
@@ -11,6 +12,8 @@ import javax.crypto.Cipher
 import javax.crypto.spec.{IvParameterSpec, SecretKeySpec}
 import javax.xml.bind.DatatypeConverter
 
+import com.mongodb.BasicDBList
+import com.mongodb.casbah.Imports
 import com.mongodb.casbah.commons.MongoDBObject
 import main.KasbahMongoDriver
 import main.models.MyJsonProtocol._
@@ -80,55 +83,66 @@ trait SampleRoute extends HttpService {
       respondWithMediaType(MediaTypes.`application/json`) {
         post {
           entity(as[User]) { user =>
-            val pwd:String = user.password
+            val pwd: String = user.password
 
-//            user.password = Base64.decodeBase64()
+            //            user.password = Base64.decodeBase64()
 
-            val query = Document("username"->user.username)
-            val userDBCriteria = MongoDBObject("username"->user.username)
-            var userDB_S:String = ""
+            val query = Document("username" -> user.username)
+            val userDBCriteria = MongoDBObject("username" -> user.username)
             var userDB: Option[User] = None
-            mongoDriver.usersCollection.findOne(userDBCriteria).foreach{ x =>
+            val jsonResponse: JSONObject = new JSONObject()
+            mongoDriver.usersCollection.findOne(userDBCriteria).foreach { x =>
               val id = x.get("_id").asInstanceOf[ObjectId].toString
               val username = x.get("username").asInstanceOf[String]
               val pwd = x.get("password").asInstanceOf[String]
               var orgId = ""
-              if(x.containsField("orgID"))
-                orgId = x.get("orgID").asInstanceOf[String]
-              val cUser = User(Some(id), username, pwd,Some(orgId))
+              if (x.containsField("orgId"))
+                orgId = x.get("orgId").asInstanceOf[String]
+
+              val cUser = User(Some(id), username, pwd, Some(orgId))
               userDB = Some(cUser)
             }
-            println("userdbpwd = " + userDB.get.password)
-            println("userpwd = " + user.password)
-//            val pwdMongo = String(BCrypt.decode_base64(userDB.get.password,10000)
-              if(BCrypt.checkpw(user.password, userDB.get.password)){
-                val token = generateAddToken()
-                val jsonUser = userDB.toJson
-                if(userDB.get.orgID.equals(""))
-                  complete(jsonUser.toString() + token)
-                else{
-                  var company = ""
-                  val companyDBCriteria = MongoDBObject("orgID"->userDB.get.orgID)
-                  mongoDriver.orgsCollection.findOne(companyDBCriteria).foreach { x =>
-                    company = x.toString()
-                    val companyName = x.get("name").asInstanceOf[String]
-                    val companyId = x.get("_id").asInstanceOf[ObjectId].toString()
-                    val listId = x.get("listId").asInstanceOf[String]
-                    val creatorId = x.get("CreatorId").asInstanceOf[String]
-                  }
-                  val jsonCompany = ""
-                  complete("")
-                }
-              }
-            else
-                complete("fail")
+            //            println("userdbpwd = " + userDB.get.password)
+            //            println("userpwd = " + user.password)
+            //            val pwdMongo = String(BCrypt.decode_base64(userDB.get.password,10000)
+            if (BCrypt.checkpw(user.password, userDB.get.password)) {
+              val token = generateAddToken()
+              val company = mongoDriver.orgsCollection.findOne(MongoDBObject("_id" -> new ObjectId(userDB.get.orgID.get)))
+              jsonResponse.put("company", company.get.toString)
+              jsonResponse.put("user", userDB.toJson.toString())
+              jsonResponse.put("token", generateAddToken())
 
+              //                val jsonUser = userDB.toJson
+              //                if(userDB.get.orgID.equals(""))
+              //                  complete(jsonResponse.toString())
+              //                else{
+              //                  var company:Company = Company(None,"","",None)
+              //                  val companyDBCriteria = MongoDBObject("orgId"->userDB.get.orgID)
+              //                  mongoDriver.orgsCollection.findOne(companyDBCriteria).foreach { x =>
+              //                    val companyName = x.get("name").asInstanceOf[String]
+              //                    val companyId = x.get("_id").asInstanceOf[ObjectId].toString()
+              //                    val listId = x.get("listId").asInstanceOf[String]
+              //                    val creatorId = x.get("creatorId").asInstanceOf[String]
+              //                    company._id=Some(companyId)
+              //                    company.ListId=Some(listId)
+              //                    company.creatorId=creatorId
+              //                    company.name=companyName
+              //                  }
+              //                  import main.models.CompanyJsonProtocol._
+              //                  jsonResponse.put("company",company.toJson.toString())
+              complete(jsonResponse.toString())
+
+            }
+
+
+            else
+              complete("fail")
           }
         }
       }
-
     } ~
-    path("newGroup"){
+    path("newgroup"){
+      import main.models.CompanyJsonProtocol._
       respondWithMediaType(MediaTypes.`application/json`) {
         post{
           entity(as[Company]){ company =>
@@ -145,22 +159,33 @@ trait SampleRoute extends HttpService {
             if(companyDB != None)
               complete("exists")
             else{
-              mongoDriver.orgsCollection += MongoDBObject("name" -> company.name,"creatorId" -> company.creatorID)
+              val json:JSONObject = new JSONObject()
+              mongoDriver.orgsCollection += MongoDBObject("name" -> company.name,"creatorId" -> company.creatorId)
               mongoDriver.orgsCollection.findOne(companyDBCriteria).foreach { x =>
-                var array = ListBuffer[String]
+                var array = new ListBuffer[String]()
                 array += "apples"
                 array += "oranges"
                 array += "test"
-                mongoDriver.listCollection += MongoDBObject("orgId" -> x.get("_id").asInstanceOf[ObjectId].toString, "items"-> array)
+                val list = mongoDriver.listCollection += MongoDBObject("orgId" -> x.get("_id").asInstanceOf[ObjectId].toString, "items"-> array)
 //                mongoDriver.orgsCollection += MongoDBObject("name" -> company.name,"creatorId" -> company.creatorID)
-                mongoDriver.orgsCollection.findOne(MongoDBObject("orgId"->x.get("orgId"))).foreach { y =>
+                mongoDriver.listCollection.findOne(MongoDBObject("orgId"->x.get("_id").asInstanceOf[ObjectId].toString)).foreach { y =>
                   val update = MongoDBObject("$set" -> MongoDBObject("listId"->y.get("_id").asInstanceOf[ObjectId].toString()))
-                  val q1 = MongoDBObject("_id"->y.get("orgId"))
-                  mongoDriver.orgsCollection.findAndModify(q1,update)
-                  val json:JSONObject = new JSONObject()
-                  json.put("id",y.get("_id").asInstanceOf[ObjectId].toString())
+                  val q1 = MongoDBObject("_id"->x.get("_id"))
+                  val companyDB = mongoDriver.orgsCollection.findAndModify(q1,update)
+                  var arraySet = new ListBuffer[Imports.DBObject]()
+                  val dbo = new MongoDBObject()
+                  dbo.put("orgId",x.get("_id").asInstanceOf[ObjectId].toString)
+                  dbo.put("listId",y.get("_id").asInstanceOf[ObjectId].toString())
+                  val q2 = MongoDBObject("_id"-> new ObjectId(x.get("creatorId").asInstanceOf[String]))
+                  val updateUser = MongoDBObject("$set" -> dbo)
+
+                  val userDB = mongoDriver.usersCollection.findAndModify(q2,updateUser)
+//                  println(userDB)
+                  val companyDBC = Company(Some(x.get("_id").asInstanceOf[ObjectId].toString),x.get("name").asInstanceOf[String],company.creatorId,Some(y.get("_id").asInstanceOf[ObjectId].toString()))
+                  val userDBC = User(Some(company.creatorId),userDB.get.get("username").asInstanceOf[String],"",Some(x.get("_id").asInstanceOf[ObjectId].toString))
+                  json.put("company",companyDBC.toJson.toString)
+                  json.put("user",userDBC.toJson.toString)
                   json.put("token",generateAddToken())
-                  complete(json.toString())
 //                  json.
 //                  complete(y.get("_id").asInstanceOf[ObjectId].toString() + generateAddToken())
                 }
@@ -168,18 +193,16 @@ trait SampleRoute extends HttpService {
 
 //              val token = generateAddToken()
 //              complete(token)
+              complete(json.toString())
+
             }
-            complete("")
+
           }
         }
       }
-    }~
+    } ~
     path("register"){
       respondWithMediaType(MediaTypes.`application/json`) {
-        get{
-          val pwdEncrypted = Encryption.encrypt(key,"xyz")
-          complete(pwdEncrypted)
-        } ~
         post {
           entity(as[User]) { user =>
             val userDBCriteria = MongoDBObject("username"->user.username)
@@ -195,38 +218,59 @@ trait SampleRoute extends HttpService {
             if(userDB != None)
               complete("exists")
             else{
+              val json:JSONObject = new JSONObject()
               userDB = Some(user)
               mongoDriver.usersCollection += MongoDBObject("username" -> userDB.get.username,"password" -> userDB.get.password)
               mongoDriver.usersCollection.findOne(userDBCriteria).foreach{ x =>
-                val json:JSONObject = new JSONObject()
-                json.put("id",x.get("_id").asInstanceOf[ObjectId].toString())
-                complete(json.toString())
+                val newUser = User(Some(x.get("_id").asInstanceOf[ObjectId].toString()),
+                  x.get("username").asInstanceOf[String],"")
+                json.put("user",newUser.toJson.toString())
               }
-              complete("error")
+              complete(json.toString())
             }
 
           }
-          complete("error")
 
         }
         }
     } ~
+    path("disconnect"){
+      post{
+        entity(as[String]){token =>
+          tokens.remove(token)
+        complete("disconnected")
+        }
+      }
+    } ~
     path("getList"){
         post {
+          entity(as[String]) { jsonClientStr =>
+            val jsonClient = new JSONObject(jsonClientStr)
           headerValueByName("authToken") { token =>
-            if(tokens.contains(token) && tokens.get(token).get > Calendar.getInstance().getTimeInMillis)
-            {
-              val query = MongoDBObject("address.street" -> "Sedgwick Ave")
-              var results = ""
-              val json =  mongoDriver.listCollection.find(query).foreach{ x =>
-
-                results += x.toString
+            if (tokens.contains(token)) {
+                val query = MongoDBObject("_id" -> new ObjectId(jsonClient.getString("listId")))
+                var results = ""
+              val jsonResult:JSONObject = new JSONObject()
+                val json = mongoDriver.listCollection.find(query).foreach { x =>
+                  jsonResult.put("list",x.get("items").asInstanceOf[BasicDBList].toString)
+                }
+              if(tokens.get(token).get < Calendar.getInstance().getTimeInMillis){
+                tokens.remove(token)
+                val newToken = generateAddToken()
+                jsonResult.put("token",newToken)
               }
-              complete(results)
+              else {
+                tokens.remove(token)
+                val expiration = Calendar.getInstance().getTimeInMillis + 180000
+                tokens += token -> expiration
+              }
+              complete(jsonResult.toString())
             }
             else
               complete("invalidToken")
+            }
           }
+
         }
     }
   }

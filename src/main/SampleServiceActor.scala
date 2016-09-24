@@ -20,7 +20,7 @@ import main.models.MyJsonProtocol._
 import main.models.{Company, User}
 import org.apache.commons.codec.binary.Base64
 import org.bson.types.ObjectId
-
+import com.mongodb.casbah.query.Imports._
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
 class SampleServiceActor extends Actor with SampleRoute {
@@ -242,37 +242,107 @@ trait SampleRoute extends HttpService {
         }
       }
     } ~
+    path("addItem") {
+      respondWithMediaType(MediaTypes.`application/json`) {
+        post {
+          entity(as[String]) { jsonStr =>
+            val jsonList = new JSONObject(jsonStr)
+            headerValueByName("authToken") { token =>
+              if (tokens.contains(token)) {
+                val listDB = mongoDriver.listCollection.update(MongoDBObject("_id" -> new ObjectId(jsonList.getString("listId"))), $addToSet("items" -> jsonList.getString("item")))
+
+                val query = MongoDBObject("_id" -> new ObjectId(jsonList.getString("listId")))
+                var results = ""
+                val jsonResult: JSONObject = new JSONObject()
+                val json = mongoDriver.listCollection.findOneByID( new ObjectId(jsonList.getString("listId")))
+                println(json)
+                jsonResult.put("list", json.get("items").asInstanceOf[BasicDBList].toString)
+
+                if (tokens.get(token).get < Calendar.getInstance().getTimeInMillis) {
+                  tokens.remove(token)
+                  val newToken = generateAddToken()
+                  jsonResult.put("token", newToken)
+                }
+                else {
+                  tokens.remove(token)
+                  val expiration = Calendar.getInstance().getTimeInMillis + 180000
+                  tokens += token -> expiration
+                }
+                complete(jsonResult.toString())
+              }
+              else
+                complete("invalidToken")
+            }
+          }
+        }
+      }
+    }~
+      path("removeItem") {
+        respondWithMediaType(MediaTypes.`application/json`) {
+          post {
+            entity(as[String]) { jsonStr =>
+              val jsonList = new JSONObject(jsonStr)
+              headerValueByName("authToken") { token =>
+                if (tokens.contains(token)) {
+                  val listDB = mongoDriver.listCollection.update(MongoDBObject("_id" -> new ObjectId(jsonList.getString("listId"))), $pull("items" -> jsonList.getString("item")))
+
+                  val query = MongoDBObject("_id" -> new ObjectId(jsonList.getString("listId")))
+                  var results = ""
+                  val jsonResult: JSONObject = new JSONObject()
+                  val json = mongoDriver.listCollection.findOneByID( new ObjectId(jsonList.getString("listId")))
+                  println(json)
+                  jsonResult.put("list", json.get("items").asInstanceOf[BasicDBList].toString)
+
+                  if (tokens.get(token).get < Calendar.getInstance().getTimeInMillis) {
+                    tokens.remove(token)
+                    val newToken = generateAddToken()
+                    jsonResult.put("token", newToken)
+                  }
+                  else {
+                    tokens.remove(token)
+                    val expiration = Calendar.getInstance().getTimeInMillis + 180000
+                    tokens += token -> expiration
+                  }
+                  complete(jsonResult.toString())
+                }
+                else
+                  complete("invalidToken")
+              }
+            }
+          }
+        }
+      } ~
     path("getList"){
         post {
           entity(as[String]) { jsonClientStr =>
             val jsonClient = new JSONObject(jsonClientStr)
-          headerValueByName("authToken") { token =>
-            if (tokens.contains(token)) {
+            headerValueByName("authToken") { token =>
+              if (tokens.contains(token)) {
                 val query = MongoDBObject("_id" -> new ObjectId(jsonClient.getString("listId")))
                 var results = ""
-              val jsonResult:JSONObject = new JSONObject()
+                val jsonResult: JSONObject = new JSONObject()
                 val json = mongoDriver.listCollection.find(query).foreach { x =>
-                  jsonResult.put("list",x.get("items").asInstanceOf[BasicDBList].toString)
+                  jsonResult.put("list", x.get("items").asInstanceOf[BasicDBList].toString)
                 }
-              if(tokens.get(token).get < Calendar.getInstance().getTimeInMillis){
-                tokens.remove(token)
-                val newToken = generateAddToken()
-                jsonResult.put("token",newToken)
+                if (tokens.get(token).get < Calendar.getInstance().getTimeInMillis) {
+                  tokens.remove(token)
+                  val newToken = generateAddToken()
+                  jsonResult.put("token", newToken)
+                }
+                else {
+                  tokens.remove(token)
+                  val expiration = Calendar.getInstance().getTimeInMillis + 180000
+                  tokens += token -> expiration
+                }
+                complete(jsonResult.toString())
               }
-              else {
-                tokens.remove(token)
-                val expiration = Calendar.getInstance().getTimeInMillis + 180000
-                tokens += token -> expiration
-              }
-              complete(jsonResult.toString())
-            }
-            else
-              complete("invalidToken")
+              else
+                complete("invalidToken")
             }
           }
+        }
 
         }
     }
-  }
 
 }

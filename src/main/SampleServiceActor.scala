@@ -234,6 +234,42 @@ trait SampleRoute extends HttpService {
         }
         }
     } ~
+      path("addUserGroup") {
+        respondWithMediaType(MediaTypes.`application/json`) {
+          post {
+            entity(as[String]) { jsonStr =>
+              val jsonList = new JSONObject(jsonStr)
+              headerValueByName("authToken") { token =>
+                if (tokens.contains(token)) {
+                  val listDB = mongoDriver.usersCollection.update(MongoDBObject("username" -> jsonList.getString("userName")), $set("orgId" -> new ObjectId(jsonList.getString("orgId")).toString(),"listId" -> jsonList.getString("listId")))
+                  val jsonResult: JSONObject = new JSONObject()
+                  jsonResult.put("result","ok")
+
+                  //                  val query = MongoDBObject("_id" -> new ObjectId(jsonList.getString("listId")))
+//                  var results = ""
+//                  val json = mongoDriver.listCollection.findOneByID( new ObjectId(jsonList.getString("listId")))
+//                  println(json)
+//                  jsonResult.put("list", json.get("items").asInstanceOf[BasicDBList].toString)
+
+                  if (tokens.get(token).get < Calendar.getInstance().getTimeInMillis) {
+                    tokens.remove(token)
+                    val newToken = generateAddToken()
+                    jsonResult.put("token", newToken)
+                  }
+                  else {
+                    tokens.remove(token)
+                    val expiration = Calendar.getInstance().getTimeInMillis + 180000
+                    tokens += token -> expiration
+                  }
+                  complete(jsonResult.toString())
+                }
+                else
+                  complete("invalidToken")
+              }
+            }
+          }
+        }
+      }~
     path("disconnect"){
       post{
         entity(as[String]){token =>

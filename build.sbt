@@ -1,9 +1,11 @@
+
 name := "MongoTest"
 
 version := "1.0"
 
 scalaVersion := "2.11.8"
 
+lazy val root = (project in file(".")).enablePlugins(JavaAppPackaging)
 resolvers += "spray repo" at "http://repo.spray.io"
 
 libraryDependencies += "org.mongodb.scala" %% "mongo-scala-driver" % "1.1.1"
@@ -11,7 +13,7 @@ libraryDependencies += "commons-codec" % "commons-codec" % "1.10"
 val akka = "2.3.9"
 
 val spray = "1.3.2"
-
+mainClass in (Compile, run) := Some("Main")
 resolvers += Resolver.url("TypeSafe Ivy releases", url("http://dl.bintray.com/typesafe/ivy-releases/"))(Resolver.ivyStylePatterns)
 libraryDependencies += "org.mongodb" %% "casbah" % "3.1.1"
 libraryDependencies += "org.json" % "json" % "20090211"

@@ -86,7 +86,7 @@ trait SampleRoute extends HttpService {
             val pwd: String = user.password
 
             //            user.password = Base64.decodeBase64()
-
+            var hasOrg = false
             val query = Document("username" -> user.username)
             val userDBCriteria = MongoDBObject("username" -> user.username)
             var userDB: Option[User] = None
@@ -96,19 +96,25 @@ trait SampleRoute extends HttpService {
               val username = x.get("username").asInstanceOf[String]
               val pwd = x.get("password").asInstanceOf[String]
               var orgId = ""
-              if (x.containsField("orgId"))
+              if (x.containsField("orgId")) {
                 orgId = x.get("orgId").asInstanceOf[String]
-
+                hasOrg = true
+              }
               val cUser = User(Some(id), username, pwd, Some(orgId))
               userDB = Some(cUser)
+
             }
+            if(userDB==None)
+              complete("none")
             //            println("userdbpwd = " + userDB.get.password)
             //            println("userpwd = " + user.password)
             //            val pwdMongo = String(BCrypt.decode_base64(userDB.get.password,10000)
-            if (BCrypt.checkpw(user.password, userDB.get.password)) {
+            else if (BCrypt.checkpw(user.password, userDB.get.password)) {
               val token = generateAddToken()
-              val company = mongoDriver.orgsCollection.findOne(MongoDBObject("_id" -> new ObjectId(userDB.get.orgID.get)))
-              jsonResponse.put("company", company.get.toString)
+              if(hasOrg) {
+                val company = mongoDriver.orgsCollection.findOne(MongoDBObject("_id" -> new ObjectId(userDB.get.orgID.get)))
+                jsonResponse.put("company", company.get.toString)
+              }
               jsonResponse.put("user", userDB.toJson.toString())
               jsonResponse.put("token", generateAddToken())
 
@@ -133,8 +139,6 @@ trait SampleRoute extends HttpService {
               complete(jsonResponse.toString())
 
             }
-
-
             else
               complete("fail")
           }
@@ -163,9 +167,9 @@ trait SampleRoute extends HttpService {
               mongoDriver.orgsCollection += MongoDBObject("name" -> company.name,"creatorId" -> company.creatorId)
               mongoDriver.orgsCollection.findOne(companyDBCriteria).foreach { x =>
                 var array = new ListBuffer[String]()
-                array += "apples"
-                array += "oranges"
-                array += "test"
+//                array += "Sample/Exemple"
+//                array += "oranges"
+//                array += "test"
                 val list = mongoDriver.listCollection += MongoDBObject("orgId" -> x.get("_id").asInstanceOf[ObjectId].toString, "items"-> array)
 //                mongoDriver.orgsCollection += MongoDBObject("name" -> company.name,"creatorId" -> company.creatorID)
                 mongoDriver.listCollection.findOne(MongoDBObject("orgId"->x.get("_id").asInstanceOf[ObjectId].toString)).foreach { y =>
@@ -212,6 +216,7 @@ trait SampleRoute extends HttpService {
               val username = x.get("username").asInstanceOf[String]
               val pwd = x.get("password").asInstanceOf[String]
               val pwdHashed = BCrypt.hashpw(pwd,BCrypt.gensalt())
+              println(pwdHashed)
                 val cUser = User(Some(id), username, pwdHashed)
                 userDB = Some(cUser)
             }
@@ -220,7 +225,8 @@ trait SampleRoute extends HttpService {
             else{
               val json:JSONObject = new JSONObject()
               userDB = Some(user)
-              mongoDriver.usersCollection += MongoDBObject("username" -> userDB.get.username,"password" -> userDB.get.password)
+              val pwdHashed = BCrypt.hashpw(userDB.get.password,BCrypt.gensalt())
+              mongoDriver.usersCollection += MongoDBObject("username" -> userDB.get.username,"password" -> pwdHashed)
               mongoDriver.usersCollection.findOne(userDBCriteria).foreach{ x =>
                 val newUser = User(Some(x.get("_id").asInstanceOf[ObjectId].toString()),
                   x.get("username").asInstanceOf[String],"")
@@ -241,7 +247,7 @@ trait SampleRoute extends HttpService {
               val jsonList = new JSONObject(jsonStr)
               headerValueByName("authToken") { token =>
                 if (tokens.contains(token)) {
-                  val listDB = mongoDriver.usersCollection.update(MongoDBObject("username" -> jsonList.getString("userName")), $set("orgId" -> new ObjectId(jsonList.getString("orgId")).toString(),"listId" -> jsonList.getString("listId")))
+                  val listDB = mongoDriver.usersCollection.update(MongoDBObject("username" -> jsonList.getString("userName")), $set("orgId" -> jsonList.getString("orgId").toString(),"listId" -> jsonList.getString("listId")))
                   val jsonResult: JSONObject = new JSONObject()
                   jsonResult.put("result","ok")
 

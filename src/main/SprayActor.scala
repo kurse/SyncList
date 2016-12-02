@@ -31,17 +31,16 @@ import scala.collection.mutable.ListBuffer
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Random
 import scala.util.parsing.json.JSONArray
-class SampleServiceActor extends Actor with SampleRoute {
+class HeyListServiceActor extends Actor with HeyListRoute {
   def actorRefFactory = context
   def receive = runRoute(route)
 }
 
-trait SampleRoute extends HttpService {
+trait HeyListRoute extends HttpService {
   import spray.httpx.SprayJsonSupport._
   import spray.http.MediaTypes
   import main.BearerTokenGenerator
 
-  val key: String = "7AA38A614149293C80FFD1EB95FD0225"
   val tokensMap:List[String] = List()
   val tokens = scala.collection.mutable.Map[String, Long]()
 
@@ -76,7 +75,6 @@ trait SampleRoute extends HttpService {
 
     // set the Content-type
     post.setHeader("Content-Type", "application/json")
-    post.setHeader("Authorization","key=AIzaSyBq6kVVAgW5205RDhYDz4bdCqWq9f1G9sI")
     // add the JSON as a StringEntity
     post.setEntity(new StringEntity(jsonBody))
     // send the post request
@@ -136,7 +134,6 @@ trait SampleRoute extends HttpService {
     import courier._, Defaults._
     val mailer = Mailer("smtp.gmail.com", 587)
       .auth(true)
-      .as("hey.youssef@hey-labs.com", "Nightbird+1")
       .startTtls(true)()
     val fromAddress:InternetAddress = new InternetAddress("heylist@heylabs.com")
     val toAddress:InternetAddress = new InternetAddress(to)
